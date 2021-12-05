@@ -1,6 +1,7 @@
 package main
 
 import (
+    "io/ioutil"
 	"encoding/json"
     "fmt"
     "log"
@@ -47,6 +48,46 @@ func allBookmarks(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(bookmarks)
 }
 
+const bm_html = `
+<html>
+<body>
+<ul>
+%s
+</ul>
+</body>
+</html>
+`
+
+const bm_html_e = `
+<div>
+    <a href="%s"><h1>%s</h1></a>
+    <small>%s</small>
+    <p>%s</p>
+</div>
+`
+
+func allBookmarksHTML(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+    db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
+        panic("failed to connect database")
+    }
+    defer db.Close()
+
+    var bookmarks []Bookmark
+    db.Find(&bookmarks)
+
+    var book_html_elements string
+    for _,e := range bookmarks {
+        book_html_elements += fmt.Sprintf(bm_html_e, e.URL, e.Title, e.Category, e.Description)
+    }
+
+    var output = fmt.Sprintf(bm_html, book_html_elements)
+
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    fmt.Fprint(w, output)
+}
+
 func newBookmark(w http.ResponseWriter, r *http.Request) {
     printRequest(r.Method,r.RequestURI)
 
@@ -56,13 +97,11 @@ func newBookmark(w http.ResponseWriter, r *http.Request) {
     }
     defer db.Close()
 
-    vars := mux.Vars(r)
-    title := vars["title"]
-    desc := vars["description"]
-	url := vars["url"]
-	cat := vars["category"]
+    reqBody, _ := ioutil.ReadAll(r.Body)
+    var bookmark Bookmark
+    json.Unmarshal(reqBody, &bookmark)
 
-    db.Create(&Bookmark{Title: title, Description: desc, URL: url, Category: cat})
+    db.Create(&bookmark)
     json.NewEncoder(w).Encode(&Response{Message: "Created new Bookmark"})
 }
 
@@ -151,12 +190,14 @@ func initialMigration() {
 
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/", allBookmarksHTML).Methods("GET")
 	myRouter.HandleFunc("/users", allUsers).Methods("GET")
 	myRouter.HandleFunc("/user/{name}", deleteUser).Methods("DELETE")
 	myRouter.HandleFunc("/user/{name}/{email}", updateUser).Methods("PUT")
 	myRouter.HandleFunc("/user/{name}/{email}", newUser).Methods("POST")
 	myRouter.HandleFunc("/bms", allBookmarks).Methods("GET")
-	myRouter.HandleFunc("/bm/{title}/{description}/{url}/{category}", newBookmark).Methods("POST")
+	myRouter.HandleFunc("/bm", newBookmark).Methods("POST")
+	// myRouter.HandleFunc("/bm/{title}/{description}/{url}/{category}", newBookmark).Methods("POST")
 	log.Fatal(http.ListenAndServe(":8081", myRouter))
 }
 
