@@ -105,6 +105,48 @@ func newBookmark(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(&Response{Message: "Created new Bookmark"})
 }
 
+func deleteBookmark(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		panic("failed to connect database")
+	}
+	defer db.Close()
+
+	reqBody, _ := ioutil.ReadAll(r.Body)
+    var bookmark Bookmark
+    json.Unmarshal(reqBody, &bookmark)
+
+	var bm Bookmark
+	db.Where("ID = ?", bookmark.ID).Find(&bm)
+	db.Delete(&bm)
+
+	json.NewEncoder(w).Encode(&Response{Message: "Successfully deleted Bookmark"})
+}
+
+func updateBookmark(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		panic("failed to connect database")
+	}
+	defer db.Close()
+
+	reqBody, _ := ioutil.ReadAll(r.Body)
+    var bookmark Bookmark
+    json.Unmarshal(reqBody, &bookmark)
+
+	var bm Bookmark
+	db.Where("ID = ?", bookmark.ID).Find(&bm)
+
+    bm.Title = bookmark.Title
+	bm.URL = bookmark.URL
+
+	db.Save(&bm)
+	json.NewEncoder(w).Encode(&Response{Message: "Successfully updated Bookmark"})
+}
+
+
 func allUsers(w http.ResponseWriter, r *http.Request) {
 	printRequest(r.Method,r.RequestURI)
     db, err := gorm.Open("sqlite3", "test.db")
@@ -191,13 +233,17 @@ func initialMigration() {
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/", allBookmarksHTML).Methods("GET")
+
 	myRouter.HandleFunc("/users", allUsers).Methods("GET")
 	myRouter.HandleFunc("/user/{name}", deleteUser).Methods("DELETE")
 	myRouter.HandleFunc("/user/{name}/{email}", updateUser).Methods("PUT")
 	myRouter.HandleFunc("/user/{name}/{email}", newUser).Methods("POST")
+
 	myRouter.HandleFunc("/bms", allBookmarks).Methods("GET")
 	myRouter.HandleFunc("/bm", newBookmark).Methods("POST")
-	// myRouter.HandleFunc("/bm/{title}/{description}/{url}/{category}", newBookmark).Methods("POST")
+    myRouter.HandleFunc("/bm", deleteBookmark).Methods("DELETE")
+    myRouter.HandleFunc("/bm", updateBookmark).Methods("PUT")
+
 	log.Fatal(http.ListenAndServe(":8081", myRouter))
 }
 
