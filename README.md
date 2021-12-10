@@ -1,3 +1,3 @@
-# 3n3a API
+# Bookmarks API
 
-Goal is to be able to have CRUD for Projects and eventually a frontend to nicely display all these projects, categorized and all.
+Goal is to be able to have CRUD for Bookmarks and eventually a frontend to nicely display all these bookmarks, categorized and all.

@@ -1,148 +1,258 @@
 package main
 
 import (
+    "io/ioutil"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"net/http"
-
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
+    "fmt"
+    "log"
+    "net/http"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+    "github.com/gorilla/mux"
 )
 
-const port = ":8081"
-const version = "1.0.0"
-const db_name = "projects.db"
+// Our User Struct
+type User struct {
+    gorm.Model
+    Name  string
+    Email string
+}
 
 type Response struct {
 	Message string
 }
 
-type Project struct {
+type Bookmark struct {
 	gorm.Model
-	Title       string
+	Title string
 	Description string
-	URL         string
+	URL string
+	Category string
 }
 
 func printRequest(method string, action string) {
 	fmt.Printf("#%s %s\n", method, action)
 }
 
-func allProjects(w http.ResponseWriter, r *http.Request) {
-	printRequest(r.Method, r.RequestURI)
-	db, err := gorm.Open("sqlite3", db_name)
-	if err != nil {
-		panic("failed to connect database")
-	}
-	defer db.Close()
+func allBookmarks(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+    db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
+        panic("failed to connect database")
+    }
+    defer db.Close()
 
-	var projects []Project
-	db.Find(&projects)
+    var bookmarks []Bookmark
+    db.Find(&bookmarks)
 
-	json.NewEncoder(w).Encode(projects)
+    json.NewEncoder(w).Encode(bookmarks)
 }
 
-func newProject(w http.ResponseWriter, r *http.Request) {
-	printRequest(r.Method, r.RequestURI)
+const bm_html = `
+<html>
+<body>
+<ul>
+%s
+</ul>
+</body>
+</html>
+`
 
-	db, err := gorm.Open("sqlite3", db_name)
+const bm_html_e = `
+<div>
+    <a href="%s"><h1>%s</h1></a>
+    <small>%s</small>
+    <p>%s</p>
+</div>
+`
+
+func allBookmarksHTML(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+    db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
+        panic("failed to connect database")
+    }
+    defer db.Close()
+
+    var bookmarks []Bookmark
+    db.Find(&bookmarks)
+
+    var book_html_elements string
+    for _,e := range bookmarks {
+        book_html_elements += fmt.Sprintf(bm_html_e, e.URL, e.Title, e.Category, e.Description)
+    }
+
+    var output = fmt.Sprintf(bm_html, book_html_elements)
+
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    fmt.Fprint(w, output)
+}
+
+func newBookmark(w http.ResponseWriter, r *http.Request) {
+    printRequest(r.Method,r.RequestURI)
+
+    db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
+        panic("failed to connect database")
+    }
+    defer db.Close()
+
+    reqBody, _ := ioutil.ReadAll(r.Body)
+    var bookmark Bookmark
+    json.Unmarshal(reqBody, &bookmark)
+
+    db.Create(&bookmark)
+    json.NewEncoder(w).Encode(&Response{Message: "Created new Bookmark"})
+}
+
+func deleteBookmark(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
 		panic("failed to connect database")
 	}
 	defer db.Close()
 
 	reqBody, _ := ioutil.ReadAll(r.Body)
-	var project Project
-	json.Unmarshal(reqBody, &project)
+    var bookmark Bookmark
+    json.Unmarshal(reqBody, &bookmark)
 
-	db.Create(&project)
-	json.NewEncoder(w).Encode(&Response{Message: "Created new Project"})
-}
-
-func deleteProject(w http.ResponseWriter, r *http.Request) {
-	printRequest(r.Method, r.RequestURI)
-	db, err := gorm.Open("sqlite3", db_name)
-	if err != nil {
-		panic("failed to connect database")
-	}
-	defer db.Close()
-
-	reqBody, _ := ioutil.ReadAll(r.Body)
-	var project Project
-	json.Unmarshal(reqBody, &project)
-
-	var bm Project
-	db.Where("ID = ?", project.ID).Find(&bm)
+	var bm Bookmark
+	db.Where("ID = ?", bookmark.ID).Find(&bm)
 	db.Delete(&bm)
 
-	json.NewEncoder(w).Encode(&Response{Message: "Successfully deleted Project"})
+	json.NewEncoder(w).Encode(&Response{Message: "Successfully deleted Bookmark"})
 }
 
-func updateProject(w http.ResponseWriter, r *http.Request) {
-	printRequest(r.Method, r.RequestURI)
-	db, err := gorm.Open("sqlite3", db_name)
+func updateBookmark(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
 		panic("failed to connect database")
 	}
 	defer db.Close()
 
 	reqBody, _ := ioutil.ReadAll(r.Body)
-	var project Project
-	json.Unmarshal(reqBody, &project)
+    var bookmark Bookmark
+    json.Unmarshal(reqBody, &bookmark)
 
-	var bm Project
-	db.Where("ID = ?", project.ID).Find(&bm)
+	var bm Bookmark
+	db.Where("ID = ?", bookmark.ID).Find(&bm)
 
-	bm.Title = project.Title
-	bm.URL = project.URL
+    bm.Title = bookmark.Title
+	bm.URL = bookmark.URL
 
 	db.Save(&bm)
-	json.NewEncoder(w).Encode(&Response{Message: "Successfully updated Project"})
+	json.NewEncoder(w).Encode(&Response{Message: "Successfully updated Bookmark"})
 }
 
-func RootHandler(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(&Response{Message: fmt.Sprintf("API Version %s", version)})
+
+func allUsers(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+    db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
+        panic("failed to connect database")
+    }
+    defer db.Close()
+
+    var users []User
+    db.Find(&users)
+
+    json.NewEncoder(w).Encode(users)
 }
 
-func EneaHandler(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(&Response{Message: "Congrats! You know my Name :)"})
+func newUser(w http.ResponseWriter, r *http.Request) {
+    printRequest(r.Method,r.RequestURI)
+
+    db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
+        panic("failed to connect database")
+    }
+    defer db.Close()
+
+    vars := mux.Vars(r)
+    name := vars["name"]
+    email := vars["email"]
+
+    db.Create(&User{Name: name, Email: email})
+    json.NewEncoder(w).Encode(&Response{Message: "Created new User"})
+}
+
+func deleteUser(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		panic("failed to connect database")
+	}
+	defer db.Close()
+
+	vars := mux.Vars(r)
+	name := vars["name"]
+
+	var user User
+	db.Where("name = ?", name).Find(&user)
+	db.Delete(&user)
+
+	json.NewEncoder(w).Encode(&Response{Message: "Successfully deleted User"})
+}
+
+func updateUser(w http.ResponseWriter, r *http.Request) {
+	printRequest(r.Method,r.RequestURI)
+	db, err := gorm.Open("sqlite3", "test.db")
+	if err != nil {
+		panic("failed to connect database")
+	}
+	defer db.Close()
+
+	vars := mux.Vars(r)
+	name := vars["name"]
+	email := vars["email"]
+
+	var user User
+	db.Where("name = ?", name).Find(&user)
+
+	user.Email = email
+
+	db.Save(&user)
+	json.NewEncoder(w).Encode(&Response{Message: "Successfully updated User"})
 }
 
 func initialMigration() {
-	db, err := gorm.Open("sqlite3", db_name)
-	if err != nil {
+	db, err := gorm.Open("sqlite3", "test.db")
+    if err != nil {
 		fmt.Println(err.Error())
-		panic("failed to connect database")
-	}
-	defer db.Close()
-
-	// Migrate the schema
-	db.AutoMigrate(&Project{})
+        panic("failed to connect database")
+    }
+    defer db.Close()
+	
+    // Migrate the schema
+    db.AutoMigrate(&User{})
+    db.AutoMigrate(&Bookmark{})
 }
 
 func handleRequests() {
-	credentials := handlers.AllowCredentials()
-	methods := handlers.AllowedMethods([]string{"POST", "GET", "PUT", "DELETE", "ENEA"})
-	origins := handlers.AllowedOrigins([]string{"http://localhost:9000"})
-
 	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/", EneaHandler).Methods("ENEA")
-	myRouter.HandleFunc("/", RootHandler)
-	myRouter.HandleFunc("/projects", allProjects).Methods("GET")
-	myRouter.HandleFunc("/project", newProject).Methods("POST")
-	myRouter.HandleFunc("/project", deleteProject).Methods("DELETE")
-	myRouter.HandleFunc("/project", updateProject).Methods("PUT")
+	myRouter.HandleFunc("/", allBookmarksHTML).Methods("GET")
 
-	log.Fatal(http.ListenAndServe(port, handlers.CORS(credentials, methods, origins)(myRouter)))
+	myRouter.HandleFunc("/users", allUsers).Methods("GET")
+	myRouter.HandleFunc("/user/{name}", deleteUser).Methods("DELETE")
+	myRouter.HandleFunc("/user/{name}/{email}", updateUser).Methods("PUT")
+	myRouter.HandleFunc("/user/{name}/{email}", newUser).Methods("POST")
+
+	myRouter.HandleFunc("/bms", allBookmarks).Methods("GET")
+	myRouter.HandleFunc("/bm", newBookmark).Methods("POST")
+    myRouter.HandleFunc("/bm", deleteBookmark).Methods("DELETE")
+    myRouter.HandleFunc("/bm", updateBookmark).Methods("PUT")
+
+	log.Fatal(http.ListenAndServe(":8081", myRouter))
 }
 
 func main() {
-	fmt.Printf("@ Started API Server http://localhost%s\n", port)
+    fmt.Println("--------------------------")
+    fmt.Println("--- Started API Server ---")
+    fmt.Println("--------------------------")
 
 	initialMigration()
-	handleRequests()
+
+    handleRequests()
 }
