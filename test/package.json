@@ -1,8 +1,0 @@
-{
-  "scripts": {
-    "test": "node add && node del"
-  },
-  "devDependencies": {
-    "axios": "^0.24.0"
-  }
-}
